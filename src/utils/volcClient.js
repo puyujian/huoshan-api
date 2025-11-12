@@ -18,21 +18,41 @@ class VolcEngineClient {
    * @returns {Promise<Object>} API 响应
    */
   async generateImage(requestBody) {
+    const startTime = Date.now();
+    const endpoint = `${this.apiBase}/images/generations`;
+
+    console.log('[Volcano API] Calling image generation API...');
+    console.log('[Volcano API] Endpoint:', endpoint);
+    console.log('[Volcano API] Request:', JSON.stringify({
+      model: requestBody.model,
+      req_key: requestBody.req_key,
+      hasImageData: !!(requestBody.image_data || requestBody.image_urls)
+    }, null, 2));
+
     try {
       const response = await axios.post(
-        `${this.apiBase}/images/generations`,
+        endpoint,
         requestBody,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.apiKey.substring(0, 10)}...`,
             'Content-Type': 'application/json'
           },
           timeout: 120000 // 120秒超时
         }
       );
 
+      const duration = Date.now() - startTime;
+      console.log(`[Volcano API] Success - took ${duration}ms`);
+      console.log('[Volcano API] Response:', JSON.stringify({
+        dataLength: response.data.data?.length,
+        hasImages: !!response.data.data?.[0]?.url
+      }, null, 2));
+
       return response.data;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[Volcano API] Error after ${duration}ms`);
       this._handleError(error);
     }
   }

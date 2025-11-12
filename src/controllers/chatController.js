@@ -14,32 +14,42 @@ const {
  * 处理聊天补全请求 (非流式)
  */
 async function handleChatCompletion(req, res, next) {
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Starting chat completion handler...`);
+
   try {
     const { stream = false } = req.body;
 
     // 如果是流式请求,转发到流式处理器
     if (stream) {
+      console.log(`[${requestId}] Routing to stream handler...`);
       return handleChatCompletionStream(req, res, next);
     }
 
+    console.log(`[${requestId}] Processing non-stream request...`);
+
     // 验证必需参数
     if (!req.body.model) {
+      console.error(`[${requestId}] Validation Error: Missing model parameter`);
       const error = new Error('Missing required parameter: model');
       error.name = 'ValidationError';
       throw error;
     }
 
     if (!req.body.messages || req.body.messages.length === 0) {
+      console.error(`[${requestId}] Validation Error: Missing messages parameter`);
       const error = new Error('Missing required parameter: messages');
       error.name = 'ValidationError';
       throw error;
     }
 
+    console.log(`[${requestId}] Converting request to Volcano format...`);
     // 转换请求参数
     const volcRequest = convertOpenAIToVolc(req.body);
 
     const apiKey = req.apiKey || process.env.VOLC_API_KEY;
     if (!apiKey) {
+      console.error(`[${requestId}] Authentication Error: Missing API key`);
       const error = new Error('Missing Volcano Engine API key');
       error.status = 401;
       error.code = 'authentication_error';
@@ -47,16 +57,20 @@ async function handleChatCompletion(req, res, next) {
     }
 
     const apiBase = req.headers['x-volc-api-base'] || process.env.VOLC_API_BASE;
+    console.log(`[${requestId}] API Base: ${apiBase || 'default'}`);
 
     // 创建火山引擎客户端
+    console.log(`[${requestId}] Creating Volcano Engine client...`);
     const volcClient = new VolcEngineClient(
       apiKey,
       apiBase
     );
 
     // 调用火山引擎 API
+    console.log(`[${requestId}] Calling Volcano Engine API...`);
     const volcResponse = await volcClient.generateImage(volcRequest);
 
+    console.log(`[${requestId}] Converting response to OpenAI format...`);
     // 转换响应为 OpenAI 格式
     const openaiResponse = convertVolcToOpenAI(volcResponse, req.body.model);
 
@@ -65,9 +79,12 @@ async function handleChatCompletion(req, res, next) {
       openaiResponse.system_message = '图片 URL 将在 24 小时内失效,请及时保存';
     }
 
+    console.log(`[${requestId}] Success! Sending response...`);
     res.json(openaiResponse);
 
   } catch (error) {
+    console.error(`[${requestId}] Error caught:`, error.message);
+    console.error(`[${requestId}] Error stack:`, error.stack);
     next(error);
   }
 }

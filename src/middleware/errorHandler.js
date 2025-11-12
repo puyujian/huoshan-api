@@ -28,10 +28,28 @@ function createOpenAIError(message, type, code, status = 500) {
  * 全局错误处理中间件
  */
 function errorHandler(err, req, res, next) {
-  console.error('[Error]', err);
+  // 详细错误日志
+  console.error('\n' + '!'.repeat(60));
+  console.error('[Error Handler] Caught error');
+  console.error('[Error Handler] Type:', err.name || 'Unknown');
+  console.error('[Error Handler] Message:', err.message);
+  console.error('[Error Handler] Code:', err.code || 'N/A');
+  console.error('[Error Handler] Status:', err.status || 'N/A');
+
+  if (err.volcResponse) {
+    console.error('[Error Handler] Volcano Response:', JSON.stringify(err.volcResponse, null, 2));
+  }
+
+  if (err.stack) {
+    console.error('[Error Handler] Stack trace:');
+    console.error(err.stack);
+  }
+
+  console.error('!'.repeat(60) + '\n');
 
   // 如果已经发送了响应头,则无法再发送错误响应
   if (res.headersSent) {
+    console.error('[Error Handler] Response already sent, cannot send error response');
     return next(err);
   }
 

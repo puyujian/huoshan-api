@@ -22,7 +22,29 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 // 请求日志中间件
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
+  console.log(`\n${'='.repeat(60)}`);
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
+
+  // 记录请求详情 (排除敏感信息)
+  if (req.method === 'POST' && req.path.includes('/chat/completions')) {
+    console.log('[Request Body]', JSON.stringify({
+      model: req.body.model,
+      stream: req.body.stream,
+      messagesCount: req.body.messages?.length,
+      hasImages: req.body.messages?.some(m =>
+        m.content && typeof m.content === 'object' &&
+        Array.isArray(m.content) &&
+        m.content.some(c => c.type === 'image_url')
+      )
+    }, null, 2));
+  }
+
+  console.log('[Headers]', JSON.stringify({
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers.authorization ? 'Bearer ***' : 'missing',
+    'x-volc-api-base': req.headers['x-volc-api-base']
+  }, null, 2));
+
   next();
 });
 
@@ -78,6 +100,22 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('\nReceived SIGINT, shutting down gracefully...');
   process.exit(0);
+});
+
+// 捕获未处理的 Promise 拒绝
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Fatal] Unhandled Promise Rejection:', reason);
+  console.error('Promise:', promise);
+  // 不要立即退出,让当前请求完成
+});
+
+// 捕获未捕获的异常
+process.on('uncaughtException', (error) => {
+  console.error('[Fatal] Uncaught Exception:', error);
+  // 记录错误后优雅退出
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
 });
 
 module.exports = app;
