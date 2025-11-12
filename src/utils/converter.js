@@ -140,8 +140,19 @@ function convertOpenAIToVolc(openaiRequest) {
   }
 
   // 提取 prompt 和 images
-  const prompt = extractPrompt(messages);
   const images = extractImages(messages);
+
+  let prompt;
+  try {
+    prompt = extractPrompt(messages);
+  } catch (error) {
+    // 没有提供文本提示词时,使用默认提示词
+    if (images && images.length > 0) {
+      prompt = 'Transform this image with artistic style';
+    } else {
+      prompt = 'Generate a beautiful image';
+    }
+  }
 
   // 构建火山引擎请求体
   const volcRequest = {

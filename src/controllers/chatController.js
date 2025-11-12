@@ -70,6 +70,20 @@ async function handleChatCompletion(req, res, next) {
     console.log(`[${requestId}] Calling Volcano Engine API...`);
     const volcResponse = await volcClient.generateImage(volcRequest);
 
+    console.log(`[${requestId}] Checking response data...`);
+    // 验证响应是否包含有效的图像数据
+    if (!volcResponse || !Array.isArray(volcResponse.data) || volcResponse.data.length === 0) {
+      console.error(`[${requestId}] Empty response from Volcano Engine API`);
+      if (volcResponse) {
+        console.error(`[${requestId}] Response structure:`, Object.keys(volcResponse));
+      }
+      const error = new Error('No image data returned from Volcano Engine API');
+      error.status = 500;
+      error.code = 'empty_response';
+      error.volcResponse = volcResponse;
+      throw error;
+    }
+
     console.log(`[${requestId}] Converting response to OpenAI format...`);
     // 转换响应为 OpenAI 格式
     const openaiResponse = convertVolcToOpenAI(volcResponse, req.body.model);
@@ -93,6 +107,9 @@ async function handleChatCompletion(req, res, next) {
  * 处理聊天补全请求 (流式)
  */
 async function handleChatCompletionStream(req, res, next) {
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Starting stream handler...`);
+
   try {
     // 验证必需参数
     if (!req.body.model) {
@@ -148,6 +165,8 @@ async function handleChatCompletionStream(req, res, next) {
     let imageIndex = 0;
     let completedReceived = false;
 
+    console.log(`[${requestId}] Calling Volcano Engine stream API...`);
+
     // 调用火山引擎流式 API
     await volcClient.generateImageStream(
       volcRequest,
@@ -160,7 +179,7 @@ async function handleChatCompletionStream(req, res, next) {
             : null);
 
           if (imageUrl) {
-            console.log(`[Stream] Image ${eventData.image_index} succeeded: ${eventData.size || 'unknown size'}`);
+            console.log(`[${requestId}] Image ${eventData.image_index} succeeded: ${eventData.size || 'unknown size'}`);
             // 发送图片数据
             res.write(createSSEChunk(
               chatId,
@@ -184,7 +203,7 @@ async function handleChatCompletionStream(req, res, next) {
           }
         } else if (eventData.type === 'partial_failed') {
           // 图片生成失败事件
-          console.error(`[Stream] Image ${eventData.image_index} failed:`, eventData.error);
+          console.error(`[${requestId}] Image ${eventData.image_index} failed:`, eventData.error);
           // 可以选择发送错误信息给客户端
           res.write(createSSEChunk(
             chatId,
@@ -199,7 +218,7 @@ async function handleChatCompletionStream(req, res, next) {
           imageIndex++;
         } else if (eventData.type === 'completed') {
           // 所有图片处理完成事件
-          console.log('[Stream] All images completed, usage:', eventData.usage);
+          console.log(`[${requestId}] All images completed, usage:`, eventData.usage);
           completedReceived = true;
           // 发送完成标记
           res.write(createSSEChunk(
@@ -214,7 +233,7 @@ async function handleChatCompletionStream(req, res, next) {
       },
       // onError 回调 - 处理请求级别的错误
       (error) => {
-        console.error('[Stream Error]', error.message);
+        console.error(`[${requestId}] Stream error:`, error.message);
         if (!res.headersSent) {
           // 如果还没有发送响应头，可以返回标准错误
           throw error;
@@ -227,7 +246,7 @@ async function handleChatCompletionStream(req, res, next) {
       },
       // onEnd 回调 - 流结束
       () => {
-        console.log('[Stream] Connection ended');
+        console.log(`[${requestId}] Stream connection ended, imageCount=${imageIndex}`);
         // 只有在没有收到 completed 事件时才发送完成标记
         if (!completedReceived && imageIndex > 0) {
           res.write(createSSEChunk(
@@ -245,6 +264,7 @@ async function handleChatCompletionStream(req, res, next) {
     );
 
   } catch (error) {
+    console.error(`[${requestId}] Stream handler error:`, error.message);
     // 对于流式响应,如果还没有发送数据,可以返回错误
     if (!res.headersSent) {
       next(error);

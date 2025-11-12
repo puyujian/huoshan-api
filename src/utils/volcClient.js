@@ -25,8 +25,10 @@ class VolcEngineClient {
     console.log('[Volcano API] Endpoint:', endpoint);
     console.log('[Volcano API] Request:', JSON.stringify({
       model: requestBody.model,
-      req_key: requestBody.req_key,
-      hasImageData: !!(requestBody.image_data || requestBody.image_urls)
+      prompt: requestBody.prompt ? requestBody.prompt.substring(0, 50) + '...' : 'N/A',
+      size: requestBody.size,
+      stream: requestBody.stream,
+      hasImage: !!requestBody.image
     }, null, 2));
 
     try {
@@ -46,7 +48,8 @@ class VolcEngineClient {
       console.log(`[Volcano API] Success - took ${duration}ms`);
       console.log('[Volcano API] Response:', JSON.stringify({
         dataLength: response.data.data?.length,
-        hasImages: !!response.data.data?.[0]?.url
+        hasImages: !!response.data.data?.[0]?.url || !!response.data.data?.[0]?.b64_json,
+        hasUsage: !!response.data.usage
       }, null, 2));
 
       return response.data;
@@ -71,6 +74,7 @@ class VolcEngineClient {
     console.log('[Volcano API] Starting stream request...');
     console.log('[Volcano API] Request:', JSON.stringify({
       model: requestBody.model,
+      prompt: requestBody.prompt ? requestBody.prompt.substring(0, 50) + '...' : 'N/A',
       stream: requestBody.stream,
       hasImage: !!requestBody.image
     }, null, 2));
@@ -183,7 +187,11 @@ class VolcEngineClient {
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[Volcano API] Stream request failed after ${duration}ms`);
-      this._handleError(error);
+      try {
+        this._handleError(error);
+      } catch (handledError) {
+        onError(handledError);
+      }
     }
   }
 
