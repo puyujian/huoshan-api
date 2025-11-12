@@ -35,7 +35,7 @@ class VolcEngineClient {
         requestBody,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey.substring(0, 10)}...`,
+            'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 120000 // 120秒超时
