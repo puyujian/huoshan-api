@@ -1,0 +1,248 @@
+我需要实现一个中间层服务,将 OpenAI Chat Completion API 格式的请求转换为火山引擎方舟平台的图片生成 API,并将响应转换回 OpenAI 格式。
+
+## 核心功能
+
+**接口转换服务**
+- 接收标准 OpenAI Chat Completion API 请求 (`POST /v1/chat/completions`)
+- 解析并转换请求参数为火山引擎图片生成 API 格式
+- 调用火山引擎接口: `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`
+- 将火山引擎响应转换为 OpenAI Chat Completion 格式返回
+- 同时支持流式和非流式两种响应模式
+
+## 参数映射规则
+
+### OpenAI → 火山引擎映射
+
+| OpenAI 参数 | 火山引擎参数 | 映射逻辑 |
+|------------|------------|---------|
+| `model` | `model` | 直接传递模型 ID,支持: `doubao-seedream-4.0`, `doubao-seedream-3.0-t2i`, `doubao-seededit-3.0-i2i` |
+| `messages[last].content` (文本) | `prompt` | 提取最后一条用户消息的文本内容 |
+| `messages[last].content` (图片) | `image` | 提取消息中的图片 URL 或 Base64,支持单图或多图(最多10张) |
+| `stream` | `stream` | 直接传递布尔值 |
+| `temperature` | `guidance_scale` | 转换公式: `guidance_scale = 1 + temperature * 9` (将 0-1 映射到 1-10) |
+| `n` | `sequential_image_generation_options.max_images` | 当 `sequential_image_generation` 为 `auto` 时生效 |
+| `size` | `size` | **支持比例格式转换** (见下方详细说明) |
+| 无对应 | `sequential_image_generation` | 默认 `disabled`,可通过额外参数控制 |
+| 无对应 | `watermark` | **默认 `false` (不添加水印)** |
+| 无对应 | `response_format` | 默认 `url`,可通过额外参数指定 `b64_json` |
+
+### Size 参数转换规则
+
+支持以下输入格式,自动转换为火山引擎支持的尺寸:
+
+**标准像素格式:**
+- `1024x1024` → `1024x1024` (直接传递)
+- `2048x2048` → `2048x2048`
+- `1792x1024` → `1792x1024`
+
+**比例格式 (OpenAI 风格):**
+- `1:1` → `2048x2048` (默认正方形)
+- `4:3` → `2304x1728`
+- `3:4` → `1728x2304` ⭐
+- `16:9` → `2560x1440`
+- `9:16` → `1440x2560`
+- `3:2` → `2496x1664`
+- `2:3` → `1664x2496`
+- `21:9` → `3024x1296`
+
+**分辨率级别:**
+- `1K` → `1K` (由模型根据 prompt 判断具体尺寸)
+- `2K` → `2K`
+- `4K` → `4K`
+
+**转换逻辑:**
+```javascript
+function convertSize(size) {
+  // 如果是比例格式 (如 "3:4")
+  if (size.includes(':')) {
+    const ratioMap = {
+      '1:1': '2048x2048',
+      '4:3': '2304x1728',
+      '3:4': '1728x2304',
+      '16:9': '2560x1440',
+      '9:16': '1440x2560',
+      '3:2': '2496x1664',
+      '2:3': '1664x2496',
+      '21:9': '3024x1296'
+    };
+    return ratioMap[size] || '2048x2048';
+  }
+
+  // 如果是分辨率级别或像素格式,直接返回
+  return size;
+}
+```
+
+### 火山引擎 → OpenAI 响应映射
+
+**非流式响应:**
+```json
+{
+  "id": "chatcmpl-{timestamp}",
+  "object": "chat.completion",
+  "created": {timestamp},
+  "model": "{model}",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "{火山引擎返回的图片URL或Base64}",
+              "detail": "auto"
+            }
+          }
+        ]
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": {output_tokens},
+    "total_tokens": {total_tokens}
+  }
+}
+```
+
+**流式响应 (SSE 格式):**
+```
+data: {"id":"chatcmpl-{timestamp}","object":"chat.completion.chunk","created":{timestamp},"model":"{model}","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-{timestamp}","object":"chat.completion.chunk","created":{timestamp},"model":"{model}","choices":[{"index":0,"delta":{"content":[{"type":"image_url","image_url":{"url":"{图片URL}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-{timestamp}","object":"chat.completion.chunk","created":{timestamp},"model":"{model}","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+## 支持的火山引擎模型能力
+
+| 模型 | 文生图 | 单图生图 | 多图生图 | 组图生成 |
+|------|-------|---------|---------|---------|
+| `doubao-seedream-4.0` | ✅ | ✅ | ✅ (最多10张输入) | ✅ (最多15张输出) |
+| `doubao-seedream-3.0-t2i` | ✅ | ❌ | ❌ | ❌ |
+| `doubao-seededit-3.0-i2i` | ❌ | ✅ | ❌ | ❌ |
+
+## 技术实现要求
+
+1. **编程语言**: Node.js (使用 Express 框架)
+2. **核心依赖**:
+   - `express`: Web 框架
+   - `axios`: HTTP 客户端
+   - `body-parser`: 请求体解析
+   - `dotenv`: 环境变量管理
+
+3. **关键功能模块**:
+   - 请求参数解析和验证
+   - 参数格式转换 (OpenAI ↔ 火山引擎)
+   - Size 参数智能转换 (支持比例格式如 `3:4`)
+   - 图片 Base64 编码/解码处理
+   - 流式响应 SSE 格式转换
+   - 错误处理和统一错误响应
+   - 火山引擎 API 鉴权 (通过 `Authorization: Bearer {API_KEY}`)
+
+4. **错误处理**:
+   - 参数验证错误 → HTTP 400
+   - 鉴权失败 → HTTP 401
+   - 火山引擎 API 错误 → 映射为 OpenAI 错误格式
+   - 超时/网络错误 → HTTP 504
+
+## 特殊处理逻辑
+
+1. **图片输入处理**:
+   - 从 OpenAI `messages` 中提取 `image_url` 类型内容
+   - 支持多图场景,自动组装为数组传递给 `image` 参数
+   - 验证图片格式、大小、宽高比等限制
+
+2. **组图模式处理**:
+   - 当 `n > 1` 时,自动设置 `sequential_image_generation` 为 `auto`
+   - 将 `n` 映射为 `max_images`
+   - 组图结果转换为多个 `choices` 返回
+
+3. **流式响应处理**:
+   - 监听火山引擎流式响应的每个数据块
+   - 将每张图片结果包装为 SSE 格式的 delta
+   - 正确处理 `[DONE]` 标记
+
+4. **水印控制**:
+   - 默认 `watermark: false` (不添加水印)
+   - 可通过额外参数 `add_watermark: true` 覆盖
+
+5. **URL 有效期提醒**:
+   - 在响应中添加提示信息:"图片 URL 将在 24 小时内失效,请及时保存"
+   - 可选: 在 `system_fingerprint` 字段中添加过期时间戳
+
+## 可选增强功能
+
+- 自动检测提示词语言,添加优化建议
+- 支持 `optimize_prompt_options` 配置 (标准/快速模式)
+- 添加请求日志记录 (时间戳、模型、参数、耗时)
+- 实现请求限流和并发控制
+- 支持图片缓存机制,减少重复请求
+- 添加健康检查接口 (`GET /health`)
+
+## 环境变量配置
+
+```bash
+# 火山引擎 API 配置
+VOLC_API_KEY=your_api_key_here
+VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3
+
+# 服务配置
+PORT=3000
+NODE_ENV=production
+
+# 可选: 默认模型
+DEFAULT_MODEL=doubao-seedream-4.0
+```
+
+## 请求示例
+
+**示例 1: 使用比例格式生成图片**
+```bash
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "doubao-seedream-4.0",
+    "messages": [
+      {
+        "role": "user",
+        "content": "一只可爱的猫咪在花园里玩耍"
+      }
+    ],
+    "size": "3:4",
+    "stream": false
+  }'
+```
+
+**示例 2: 使用像素格式生成图片**
+```bash
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "model": "doubao-seedream-4.0",
+    "messages": [
+      {
+        "role": "user",
+        "content": "一只可爱的猫咪在花园里玩耍"
+      }
+    ],
+    "size": "1728x2304",
+    "stream": false
+  }'
+```
+
+请提供完整的 Node.js 实现代码,包括:
+- Express 服务器设置
+- Size 参数转换函数 (支持 `3:4` 等比例格式)
+- 请求转换中间件
+- 火山引擎 API 调用逻辑
+- 响应转换逻辑
+- 流式/非流式响应处理
+- 完整的错误处理
