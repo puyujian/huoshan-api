@@ -33,8 +33,7 @@
 # 1. 复制环境变量配置文件
 cp .env.example .env
 
-# 2. 编辑 .env 文件，填入你的 API 密钥
-# VOLC_API_KEY=your_api_key_here
+# 2. (可选) 如果希望固定默认密钥,可以在 .env 中设置 VOLC_API_KEY
 
 # 3. 启动服务
 docker-compose up -d
@@ -56,7 +55,6 @@ docker build -t openai-to-volc-image-api .
 docker run -d \
   --name openai-to-volc-image-api \
   -p 3000:3000 \
-  -e VOLC_API_KEY=your_api_key_here \
   -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
   openai-to-volc-image-api
 
@@ -76,7 +74,6 @@ docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
 docker run -d \
   --name openai-to-volc-image-api \
   -p 3000:3000 \
-  -e VOLC_API_KEY=your_api_key_here \
   ghcr.io/[your-username]/openai-to-volc-image-api:main
 ```
 
@@ -100,7 +97,8 @@ cp .env.example .env
 
 ```env
 # 火山引擎 API 配置
-VOLC_API_KEY=your_api_key_here
+# 可选: 如果需要固定默认密钥,可以取消注释下方配置
+# VOLC_API_KEY=your_api_key_here
 VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3
 
 # 服务配置
@@ -128,16 +126,59 @@ npm run dev
 ### 端点
 
 ```
+GET  http://localhost:3000/v1/models
 POST http://localhost:3000/v1/chat/completions
 ```
 
 ### 认证
 
-使用 `Authorization` 头传递 API 密钥:
+**重要**: API 密钥通过 `Authorization` 头传递,而不是在环境变量中配置:
 
 ```
-Authorization: Bearer your-api-key
+Authorization: Bearer your-volc-api-key
 ```
+
+### 获取模型列表
+
+```bash
+curl -X GET http://localhost:3000/v1/models \
+  -H "Authorization: Bearer your-volc-api-key"
+```
+
+响应:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "doubao-seedream-4.0",
+      "object": "model",
+      "created": 1704067200,
+      "owned_by": "volcano-engine",
+      "description": "文生图、单图生图、多图生图、组图生成"
+    },
+    {
+      "id": "doubao-seedream-3.0-t2i",
+      "object": "model",
+      "created": 1704067200,
+      "owned_by": "volcano-engine",
+      "description": "文生图"
+    },
+    {
+      "id": "doubao-seededit-3.0-i2i",
+      "object": "model",
+      "created": 1704067200,
+      "owned_by": "volcano-engine",
+      "description": "单图生图"
+    }
+  ]
+}
+```
+
+### 自定义 API 基础地址
+
+默认使用 `VOLC_API_BASE` 配置的地址,也可以通过请求头 `X-Volc-Api-Base` 为单次请求指定火山引擎 API 基础地址。
 
 ### 请求示例
 
@@ -146,7 +187,7 @@ Authorization: Bearer your-api-key
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "Authorization: Bearer your-volc-api-key" \
   -d '{
     "model": "doubao-seedream-4.0",
     "messages": [
@@ -165,7 +206,7 @@ curl -X POST http://localhost:3000/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "Authorization: Bearer your-volc-api-key" \
   -d '{
     "model": "doubao-seedream-4.0",
     "messages": [
@@ -184,7 +225,7 @@ curl -X POST http://localhost:3000/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "Authorization: Bearer your-volc-api-key" \
   -d '{
     "model": "doubao-seedream-4.0",
     "messages": [
@@ -203,7 +244,7 @@ curl -X POST http://localhost:3000/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "Authorization: Bearer your-volc-api-key" \
   -d '{
     "model": "doubao-seededit-3.0-i2i",
     "messages": [
@@ -232,7 +273,7 @@ curl -X POST http://localhost:3000/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "Authorization: Bearer your-volc-api-key" \
   -d '{
     "model": "doubao-seedream-4.0",
     "messages": [
@@ -408,14 +449,13 @@ docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
 # 运行
 docker run -d \
   -p 3000:3000 \
-  -e VOLC_API_KEY=your_api_key_here \
   ghcr.io/[your-username]/openai-to-volc-image-api:main
 ```
 
 ### 配置说明
 
 确保设置了以下环境变量：
-- `VOLC_API_KEY`: 火山引擎 API 密钥（必需）
+- `VOLC_API_KEY`: 可选,设置后作为默认 API 密钥,未配置时需要通过 Authorization 头传递
 - `VOLC_API_BASE`: API 基础 URL（可选，默认: `https://ark.cn-beijing.volces.com/api/v3`）
 - `PORT`: 服务端口（可选，默认: 3000）
 - `DEFAULT_MODEL`: 默认模型（可选，默认: `doubao-seedream-4.0`）
@@ -429,7 +469,8 @@ docker run -d \
 │       └── docker-publish.yml     # Docker 镜像自动构建
 ├── src/
 │   ├── controllers/
-│   │   └── chatController.js      # 聊天补全控制器
+│   │   ├── chatController.js      # 聊天补全控制器
+│   │   └── modelsController.js    # 模型列表控制器
 │   ├── middleware/
 │   │   ├── auth.js                # 认证中间件
 │   │   └── errorHandler.js        # 错误处理中间件

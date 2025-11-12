@@ -38,10 +38,20 @@ async function handleChatCompletion(req, res, next) {
     // 转换请求参数
     const volcRequest = convertOpenAIToVolc(req.body);
 
+    const apiKey = req.apiKey || process.env.VOLC_API_KEY;
+    if (!apiKey) {
+      const error = new Error('Missing Volcano Engine API key');
+      error.status = 401;
+      error.code = 'authentication_error';
+      throw error;
+    }
+
+    const apiBase = req.headers['x-volc-api-base'] || process.env.VOLC_API_BASE;
+
     // 创建火山引擎客户端
     const volcClient = new VolcEngineClient(
-      process.env.VOLC_API_KEY,
-      process.env.VOLC_API_BASE
+      apiKey,
+      apiBase
     );
 
     // 调用火山引擎 API
@@ -102,10 +112,20 @@ async function handleChatCompletionStream(req, res, next) {
       null
     ));
 
+    const apiKey = req.apiKey || process.env.VOLC_API_KEY;
+    if (!apiKey) {
+      const error = new Error('Missing Volcano Engine API key');
+      error.status = 401;
+      error.code = 'authentication_error';
+      throw error;
+    }
+
+    const apiBase = req.headers['x-volc-api-base'] || process.env.VOLC_API_BASE;
+
     // 创建火山引擎客户端
     const volcClient = new VolcEngineClient(
-      process.env.VOLC_API_KEY,
-      process.env.VOLC_API_BASE
+      apiKey,
+      apiBase
     );
 
     let imageIndex = 0;

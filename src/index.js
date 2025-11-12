@@ -8,14 +8,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 
 const { handleChatCompletion } = require('./controllers/chatController');
+const { handleModels } = require('./controllers/modelsController');
 const { authenticateApiKey } = require('./middleware/auth');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-
-// 环境变量验证
-if (!process.env.VOLC_API_KEY) {
-  console.error('Error: VOLC_API_KEY environment variable is required');
-  process.exit(1);
-}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,6 +37,7 @@ app.get('/health', (req, res) => {
 });
 
 // API 路由
+app.get('/v1/models', authenticateApiKey, handleModels);
 app.post('/v1/chat/completions', authenticateApiKey, handleChatCompletion);
 
 // 404 处理
@@ -57,7 +53,10 @@ app.listen(PORT, () => {
   console.log('='.repeat(60));
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`API endpoint: POST http://localhost:${PORT}/v1/chat/completions`);
+  console.log(`\nAPI Endpoints:`);
+  console.log(`  GET  http://localhost:${PORT}/v1/models`);
+  console.log(`  POST http://localhost:${PORT}/v1/chat/completions`);
+  console.log(`\nAuthentication: Bearer token via Authorization header`);
   console.log('='.repeat(60));
   console.log('\nSupported models:');
   console.log('  - doubao-seedream-4.0 (文生图、单图生图、多图生图、组图生成)');

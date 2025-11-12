@@ -10,7 +10,7 @@ import sys
 
 # 配置
 API_BASE = "http://localhost:3000"
-API_KEY = "your-api-key"  # 替换为实际的 API 密钥
+API_KEY = "your-volc-api-key"  # 替换为实际的火山引擎 API 密钥
 
 
 def generate_image(prompt, size="3:4", stream=False, model="doubao-seedream-4.0"):
@@ -147,6 +147,26 @@ def health_check():
         return False
 
 
+def list_models():
+    """获取模型列表"""
+    url = f"{API_BASE}/v1/models"
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}"
+    }
+
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+
+    data = response.json()
+    print("✅ 支持的模型:")
+    for model in data.get("data", []):
+        description = model.get("description", "")
+        print(f"- {model.get('id')}: {description}")
+
+    return data
+
+
 def main():
     """主函数"""
     print("=" * 60)
@@ -159,8 +179,15 @@ def main():
         print("服务未启动,请先启动服务!")
         sys.exit(1)
 
+    # 获取模型列表
+    print("\n2. 获取模型列表")
+    try:
+        list_models()
+    except Exception as e:
+        print(f"❌ 错误: {e}")
+
     # 测试 1: 文生图 (比例格式)
-    print("\n2. 测试文生图 (比例格式 3:4)")
+    print("\n3. 测试文生图 (比例格式 3:4)")
     try:
         generate_image(
             prompt="一只可爱的橘猫在阳光明媚的花园里玩耍",
@@ -170,7 +197,7 @@ def main():
         print(f"❌ 错误: {e}")
 
     # 测试 2: 文生图 (像素格式)
-    print("\n3. 测试文生图 (像素格式 2048x2048)")
+    print("\n4. 测试文生图 (像素格式 2048x2048)")
     try:
         generate_image(
             prompt="一个科幻风格的未来城市,霓虹灯闪烁",
@@ -180,7 +207,7 @@ def main():
         print(f"❌ 错误: {e}")
 
     # 测试 3: 组图生成
-    print("\n4. 测试组图生成 (3张)")
+    print("\n5. 测试组图生成 (3张)")
     try:
         generate_multiple_images(
             prompt="可爱的小狗在公园里奔跑",
