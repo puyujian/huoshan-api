@@ -81,9 +81,10 @@ app.listen(PORT, () => {
   console.log(`\nAuthentication: Bearer token via Authorization header`);
   console.log('='.repeat(60));
   console.log('\nSupported models:');
-  console.log('  - doubao-seedream-4.0 (文生图、单图生图、多图生图、组图生成)');
-  console.log('  - doubao-seedream-3.0-t2i (文生图)');
-  console.log('  - doubao-seededit-3.0-i2i (单图生图)');
+  console.log('  - doubao-seedream-4-0-250828 (文生图、图生图、组图生成)');
+  console.log('  - doubao-seedream-3-0-t2i-250415 (文生图)');
+  console.log('  - doubao-seededit-3-0-i2i-250628 (图生图/图片编辑)');
+  console.log('    Legacy aliases: doubao-seedream-4.0, doubao-seedream-3.0-t2i, doubao-seededit-3.0-i2i');
   console.log('\nSize formats:');
   console.log('  - Ratio: 1:1, 3:4, 4:3, 16:9, 9:16, 3:2, 2:3, 21:9');
   console.log('  - Pixels: 1024x1024, 2048x2048, 1792x1024, etc.');
