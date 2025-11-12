@@ -234,19 +234,18 @@ function convertVolcToOpenAI(volcResponse, model) {
       console.warn(`[Converter] Image ${index} has no url or b64_json`);
     }
 
+    // 非流式响应：使用 Markdown 格式返回图片
+    // 注意：为了兼容各种客户端，message.content 使用 string 类型
+    const imageSize = imageData.size || 'N/A';
+    const content = imageUrl
+      ? `![Generated Image ${index + 1}](${imageUrl})\n\n图片尺寸: ${imageSize}`
+      : '图片生成失败';
+
     return {
       index,
       message: {
         role: 'assistant',
-        content: imageUrl ? [
-          {
-            type: 'image_url',
-            image_url: {
-              url: imageUrl,
-              detail: 'auto'
-            }
-          }
-        ] : []
+        content
       },
       finish_reason: 'stop'
     };
