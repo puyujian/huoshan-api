@@ -97,6 +97,16 @@ function errorHandler(err, req, res, next) {
     );
     statusCode = 504;
   }
+  // 处理空响应错误
+  else if (err.code === 'empty_response') {
+    errorResponse = createOpenAIError(
+      'No image data returned from Volcano Engine API. This may occur if the API call failed or returned an unexpected response format.',
+      'api_error',
+      'empty_response',
+      500
+    );
+    statusCode = 500;
+  }
   // 处理其他错误
   else {
     errorResponse = createOpenAIError(
