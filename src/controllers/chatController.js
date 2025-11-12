@@ -180,21 +180,14 @@ async function handleChatCompletionStream(req, res, next) {
 
           if (imageUrl) {
             console.log(`[${requestId}] Image ${eventData.image_index} succeeded: ${eventData.size || 'unknown size'}`);
-            // 发送图片数据
+            // 流式响应：发送图片URL作为文本内容
+            // 注意：根据 OpenAI API 规范，流式响应的 delta.content 必须是 string 类型
             res.write(createSSEChunk(
               chatId,
               model,
               timestamp,
               {
-                content: [
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: imageUrl,
-                      detail: 'auto'
-                    }
-                  }
-                ]
+                content: `![Image ${eventData.image_index + 1}](${imageUrl})\n\n图片尺寸: ${eventData.size || 'N/A'}`
               },
               imageIndex,
               null
