@@ -70,6 +70,20 @@ async function handleChatCompletion(req, res, next) {
     console.log(`[${requestId}] Calling Volcano Engine API...`);
     const volcResponse = await volcClient.generateImage(volcRequest);
 
+    console.log(`[${requestId}] Checking response data...`);
+    // 验证响应是否包含有效的图像数据
+    if (!volcResponse || !Array.isArray(volcResponse.data) || volcResponse.data.length === 0) {
+      console.error(`[${requestId}] Empty response from Volcano Engine API`);
+      if (volcResponse) {
+        console.error(`[${requestId}] Response structure:`, Object.keys(volcResponse));
+      }
+      const error = new Error('No image data returned from Volcano Engine API');
+      error.status = 500;
+      error.code = 'empty_response';
+      error.volcResponse = volcResponse;
+      throw error;
+    }
+
     console.log(`[${requestId}] Converting response to OpenAI format...`);
     // 转换响应为 OpenAI 格式
     const openaiResponse = convertVolcToOpenAI(volcResponse, req.body.model);
@@ -146,6 +160,7 @@ async function handleChatCompletionStream(req, res, next) {
     );
 
     let imageIndex = 0;
+    let hasReceivedData = false;
 
     // 调用火山引擎流式 API
     await volcClient.generateImageStream(
@@ -160,6 +175,7 @@ async function handleChatCompletionStream(req, res, next) {
               : null);
 
             if (imageUrl) {
+              hasReceivedData = true;
               // 发送图片数据
               res.write(createSSEChunk(
                 chatId,
@@ -194,6 +210,12 @@ async function handleChatCompletionStream(req, res, next) {
       },
       // onEnd 回调
       () => {
+        // 检查是否收到了任何图像数据
+        if (!hasReceivedData) {
+          console.error('[Stream] No image data received from Volcano Engine API');
+          res.write(`data: {"error": "No image data returned from Volcano Engine API"}\n\n`);
+        }
+        
         // 发送完成标记
         res.write(createSSEChunk(
           chatId,
