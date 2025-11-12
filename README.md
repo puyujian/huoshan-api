@@ -25,13 +25,70 @@
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式一: 使用 Docker (推荐)
+
+#### 1. 使用 Docker Compose
+
+```bash
+# 1. 复制环境变量配置文件
+cp .env.example .env
+
+# 2. 编辑 .env 文件，填入你的 API 密钥
+# VOLC_API_KEY=your_api_key_here
+
+# 3. 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+#### 2. 使用 Docker 命令
+
+```bash
+# 构建镜像
+docker build -t openai-to-volc-image-api .
+
+# 运行容器
+docker run -d \
+  --name openai-to-volc-image-api \
+  -p 3000:3000 \
+  -e VOLC_API_KEY=your_api_key_here \
+  -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
+  openai-to-volc-image-api
+
+# 查看日志
+docker logs -f openai-to-volc-image-api
+```
+
+#### 3. 使用 GitHub Container Registry 镜像
+
+我们提供了自动构建的 Docker 镜像，可以直接使用:
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
+
+# 运行
+docker run -d \
+  --name openai-to-volc-image-api \
+  -p 3000:3000 \
+  -e VOLC_API_KEY=your_api_key_here \
+  ghcr.io/[your-username]/openai-to-volc-image-api:main
+```
+
+### 方式二: 本地 Node.js 运行
+
+#### 1. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 配置环境变量
+#### 2. 配置环境变量
 
 复制 `.env.example` 为 `.env` 并填入你的配置:
 
@@ -54,7 +111,7 @@ NODE_ENV=production
 DEFAULT_MODEL=doubao-seedream-4.0
 ```
 
-### 3. 启动服务
+#### 3. 启动服务
 
 ```bash
 # 生产环境
@@ -318,10 +375,58 @@ curl http://localhost:3000/health
 }
 ```
 
+## Docker 部署
+
+### Dockerfile 特性
+
+- ✅ 基于 Node.js 20 Alpine 镜像，体积小巧
+- ✅ 多阶段构建，优化镜像大小
+- ✅ 非 root 用户运行，提高安全性
+- ✅ 内置健康检查
+- ✅ 生产环境优化
+
+### 自动化构建
+
+本项目配置了 GitHub Actions 自动构建和发布 Docker 镜像到 GitHub Container Registry (ghcr.io)。
+
+**触发条件:**
+- 推送到 `main` 分支
+- 发布新的 Release
+- 手动触发 workflow
+
+**镜像标签:**
+- `main` - 最新的主分支构建
+- `sha-<commit>` - 特定 commit 的构建
+- `v1.0.0` - 版本号标签（从 Release 创建）
+
+**使用自动构建的镜像:**
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
+
+# 运行
+docker run -d \
+  -p 3000:3000 \
+  -e VOLC_API_KEY=your_api_key_here \
+  ghcr.io/[your-username]/openai-to-volc-image-api:main
+```
+
+### 配置说明
+
+确保设置了以下环境变量：
+- `VOLC_API_KEY`: 火山引擎 API 密钥（必需）
+- `VOLC_API_BASE`: API 基础 URL（可选，默认: `https://ark.cn-beijing.volces.com/api/v3`）
+- `PORT`: 服务端口（可选，默认: 3000）
+- `DEFAULT_MODEL`: 默认模型（可选，默认: `doubao-seedream-4.0`）
+
 ## 项目结构
 
 ```
 .
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml     # Docker 镜像自动构建
 ├── src/
 │   ├── controllers/
 │   │   └── chatController.js      # 聊天补全控制器
@@ -332,8 +437,11 @@ curl http://localhost:3000/health
 │   │   ├── converter.js           # 参数转换工具
 │   │   └── volcClient.js          # 火山引擎 API 客户端
 │   └── index.js                   # 主应用入口
+├── .dockerignore                  # Docker 忽略文件
 ├── .env.example                   # 环境变量示例
 ├── .gitignore
+├── docker-compose.yml             # Docker Compose 配置
+├── Dockerfile                     # Docker 镜像构建文件
 ├── package.json
 └── README.md
 ```
