@@ -195,11 +195,33 @@ function convertVolcToOpenAI(volcResponse, model) {
 
   // 处理图片结果
   const images = volcResponse.data || [];
+  const successCount = images.filter(item => !item.error).length;
+  const failCount = images.filter(item => item.error).length;
+
+  console.log(`[Converter] Processing ${images.length} items: ${successCount} succeeded, ${failCount} failed`);
 
   const choices = images.map((imageData, index) => {
+    // 检查是否是错误项
+    if (imageData.error) {
+      console.error(`[Converter] Image ${index} failed:`, imageData.error);
+      return {
+        index,
+        message: {
+          role: 'assistant',
+          content: `图片 ${index + 1} 生成失败: ${imageData.error.message || '未知错误'} (错误码: ${imageData.error.code || 'unknown'})`
+        },
+        finish_reason: 'error'
+      };
+    }
+
+    // 处理成功的图片
     const imageUrl = imageData.url || (imageData.b64_json
       ? `data:image/png;base64,${imageData.b64_json}`
       : null);
+
+    if (!imageUrl) {
+      console.warn(`[Converter] Image ${index} has no url or b64_json`);
+    }
 
     return {
       index,
@@ -230,7 +252,13 @@ function convertVolcToOpenAI(volcResponse, model) {
       completion_tokens: volcResponse.usage?.output_tokens || 0,
       total_tokens: volcResponse.usage?.total_tokens || 0
     },
-    system_fingerprint: `url_expires_${timestamp + 86400}` // 24小时后过期
+    system_fingerprint: `url_expires_${timestamp + 86400}`, // 24小时后过期
+    // 添加额外信息
+    volcengine: {
+      generated_images: volcResponse.usage?.generated_images || successCount,
+      success_count: successCount,
+      fail_count: failCount
+    }
   };
 }
 

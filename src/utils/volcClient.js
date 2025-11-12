@@ -67,6 +67,14 @@ class VolcEngineClient {
    * @returns {Promise<void>}
    */
   async generateImageStream(requestBody, onData, onError, onEnd) {
+    const startTime = Date.now();
+    console.log('[Volcano API] Starting stream request...');
+    console.log('[Volcano API] Request:', JSON.stringify({
+      model: requestBody.model,
+      stream: requestBody.stream,
+      hasImage: !!requestBody.image
+    }, null, 2));
+
     try {
       const response = await axios.post(
         `${this.apiBase}/images/generations`,
@@ -82,6 +90,7 @@ class VolcEngineClient {
       );
 
       let buffer = '';
+      let eventCount = 0;
 
       response.data.on('data', (chunk) => {
         buffer += chunk.toString();
@@ -91,34 +100,90 @@ class VolcEngineClient {
         buffer = lines.pop() || ''; // 保留最后一个不完整的行
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
+          const trimmedLine = line.trim();
 
+          // 跳过空行和注释
+          if (!trimmedLine || trimmedLine.startsWith(':')) {
+            continue;
+          }
+
+          // 处理 SSE 数据行
+          if (trimmedLine.startsWith('data:')) {
+            const data = trimmedLine.slice(5).trim();
+
+            // 检查是否是结束标记
             if (data === '[DONE]') {
+              console.log('[Volcano API] Received [DONE] marker');
               onEnd();
               return;
             }
 
             try {
               const parsed = JSON.parse(data);
-              onData(parsed);
+              eventCount++;
+              console.log(`[Volcano API] Event ${eventCount}: type=${parsed.type}, image_index=${parsed.image_index}`);
+
+              // 根据事件类型处理数据
+              if (parsed.type === 'image_generation.partial_succeeded') {
+                // 图片生成成功事件
+                onData({
+                  type: 'partial_succeeded',
+                  image_index: parsed.image_index,
+                  url: parsed.url,
+                  b64_json: parsed.b64_json,
+                  size: parsed.size,
+                  model: parsed.model,
+                  created: parsed.created
+                });
+              } else if (parsed.type === 'image_generation.partial_failed') {
+                // 图片生成失败事件
+                onData({
+                  type: 'partial_failed',
+                  image_index: parsed.image_index,
+                  error: parsed.error,
+                  model: parsed.model,
+                  created: parsed.created
+                });
+              } else if (parsed.type === 'image_generation.completed') {
+                // 所有图片处理完成事件
+                console.log(`[Volcano API] Completed - generated ${parsed.usage?.generated_images} images`);
+                onData({
+                  type: 'completed',
+                  usage: parsed.usage,
+                  model: parsed.model,
+                  created: parsed.created
+                });
+              } else if (parsed.error) {
+                // 请求级别的错误
+                console.error('[Volcano API] Error event:', parsed.error);
+                const error = new Error(parsed.error.message || 'Unknown error');
+                error.code = parsed.error.code;
+                onError(error);
+              }
             } catch (e) {
-              // 忽略解析错误的数据
+              console.error('[Volcano API] Failed to parse SSE data:', e.message);
+              console.error('[Volcano API] Raw data:', data);
             }
           }
         }
       });
 
       response.data.on('error', (error) => {
+        const duration = Date.now() - startTime;
+        console.error(`[Volcano API] Stream error after ${duration}ms:`, error.message);
         onError(error);
       });
 
       response.data.on('end', () => {
+        const duration = Date.now() - startTime;
+        console.log(`[Volcano API] Stream ended - took ${duration}ms, received ${eventCount} events`);
         onEnd();
       });
 
     } catch (error) {
-      onError(error);
+      const duration = Date.now() - startTime;
+      console.error(`[Volcano API] Stream request failed after ${duration}ms`);
+      this._handleError(error);
     }
   }
 
@@ -132,6 +197,11 @@ class VolcEngineClient {
       const status = error.response.status;
       const data = error.response.data;
 
+      console.error('[Volcano API] Error response:', {
+        status,
+        error: data.error
+      });
+
       const apiError = new Error(data.error?.message || 'Volcano Engine API Error');
       apiError.status = status;
       apiError.code = data.error?.code || 'unknown_error';
@@ -140,12 +210,14 @@ class VolcEngineClient {
       throw apiError;
     } else if (error.request) {
       // 请求发送但没有响应
+      console.error('[Volcano API] No response received');
       const timeoutError = new Error('Request timeout or network error');
       timeoutError.status = 504;
       timeoutError.code = 'network_error';
       throw timeoutError;
     } else {
       // 其他错误
+      console.error('[Volcano API] Request setup error:', error.message);
       const unknownError = new Error(error.message || 'Unknown error');
       unknownError.status = 500;
       unknownError.code = 'internal_error';
