@@ -67,57 +67,34 @@ class VolcEngineClient {
    * @returns {Promise<void>}
    */
   async generateImageStream(requestBody, onData, onError, onEnd) {
+    console.log('[Volcano API Stream] Simulating stream via polling...');
+
     try {
-      const response = await axios.post(
-        `${this.apiBase}/images/generations`,
-        requestBody,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          responseType: 'stream',
-          timeout: 120000
-        }
-      );
+      // Volcano Engine API 暂不支持真正的流式响应。
+      // 将 stream 参数强制为 false,以便获取完整响应后再通过 SSE 推送给客户端。
+      const nonStreamRequest = {
+        ...requestBody,
+        stream: false
+      };
 
-      let buffer = '';
+      const volcResponse = await this.generateImage(nonStreamRequest);
 
-      response.data.on('data', (chunk) => {
-        buffer += chunk.toString();
-
-        // 处理 SSE 格式数据
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // 保留最后一个不完整的行
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-
-            if (data === '[DONE]') {
-              onEnd();
-              return;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              onData(parsed);
-            } catch (e) {
-              // 忽略解析错误的数据
-            }
-          }
-        }
-      });
-
-      response.data.on('error', (error) => {
-        onError(error);
-      });
-
-      response.data.on('end', () => {
+      if (volcResponse && volcResponse.data && Array.isArray(volcResponse.data) && volcResponse.data.length > 0) {
+        onData(volcResponse);
         onEnd();
-      });
-
+      } else {
+        console.error('[Volcano API Stream] Empty response payload:', {
+          hasData: !!volcResponse,
+          dataKeys: volcResponse ? Object.keys(volcResponse) : []
+        });
+        const emptyError = new Error('No image data returned from Volcano Engine API');
+        emptyError.status = 502;
+        emptyError.code = 'empty_response';
+        emptyError.volcResponse = volcResponse;
+        onError(emptyError);
+      }
     } catch (error) {
+      console.error('[Volcano API Stream] Error:', error.message);
       onError(error);
     }
   }
