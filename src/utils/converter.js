@@ -197,9 +197,9 @@ function convertVolcToOpenAI(volcResponse, model) {
   const images = volcResponse.data || [];
 
   const choices = images.map((imageData, index) => {
-    const imageUrl = imageData.url || imageData.b64_json
+    const imageUrl = imageData.url || (imageData.b64_json
       ? `data:image/png;base64,${imageData.b64_json}`
-      : null;
+      : null);
 
     return {
       index,
