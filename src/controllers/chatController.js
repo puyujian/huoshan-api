@@ -167,12 +167,16 @@ async function handleChatCompletionStream(req, res, next) {
       volcRequest,
       // onData 回调
       (data) => {
+        console.log('[Stream onData] Received data from Volcano API');
         // 处理每个数据块
         if (data.data && Array.isArray(data.data)) {
-          data.data.forEach((imageData) => {
+          console.log(`[Stream onData] Processing ${data.data.length} images`);
+          data.data.forEach((imageData, idx) => {
             const imageUrl = imageData.url || (imageData.b64_json
               ? `data:image/png;base64,${imageData.b64_json}`
               : null);
+
+            console.log(`[Stream onData] Image ${idx}: ${imageUrl ? 'URL found' : 'NO URL'}`);
 
             if (imageUrl) {
               hasReceivedData = true;
@@ -198,22 +202,35 @@ async function handleChatCompletionStream(req, res, next) {
               imageIndex++;
             }
           });
+        } else {
+          console.error('[Stream onData] Invalid data structure:', {
+            hasData: !!data,
+            hasDataField: !!data?.data,
+            isArray: Array.isArray(data?.data)
+          });
         }
       },
       // onError 回调
       (error) => {
-        console.error('[Stream Error]', error);
+        console.error('[Stream Error]', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          volcResponse: error.volcResponse
+        });
         // 发送错误并关闭连接
-        res.write(`data: {"error": "${error.message}"}\n\n`);
+        const errorMessage = error.message || 'Unknown error occurred';
+        res.write(`data: ${JSON.stringify({error: {message: errorMessage, code: error.code, status: error.status}})}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
       },
       // onEnd 回调
       () => {
+        console.log('[Stream onEnd] Stream finished, hasReceivedData:', hasReceivedData);
         // 检查是否收到了任何图像数据
         if (!hasReceivedData) {
           console.error('[Stream] No image data received from Volcano Engine API');
-          res.write(`data: {"error": "No image data returned from Volcano Engine API"}\n\n`);
+          res.write(`data: ${JSON.stringify({error: {message: "No image data returned from Volcano Engine API"}})}\n\n`);
         }
         
         // 发送完成标记
