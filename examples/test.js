@@ -7,7 +7,7 @@ const axios = require('axios');
 
 // 配置
 const API_BASE = 'http://localhost:3000';
-const API_KEY = 'your-api-key'; // 替换为实际的 API 密钥
+const API_KEY = 'your-volc-api-key'; // 替换为实际的 API 密钥
 
 // 测试用例 1: 文生图 (比例格式)
 async function testTextToImageWithRatio() {
@@ -207,12 +207,36 @@ async function testHealth() {
   }
 }
 
+// 测试模型列表
+async function testModels() {
+  console.log('\n=== 测试模型列表 ===');
+
+  try {
+    const response = await axios.get(
+      `${API_BASE}/v1/models`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      }
+    );
+    console.log('✅ 获取模型列表成功');
+    console.log('支持的模型数量:', response.data.data.length);
+    response.data.data.forEach(model => {
+      console.log(`- ${model.id}: ${model.description}`);
+    });
+  } catch (error) {
+    console.error('❌ 获取模型列表失败:', error.response?.data || error.message);
+  }
+}
+
 // 运行所有测试
 async function runAllTests() {
   console.log('开始运行测试...');
   console.log('API 地址:', API_BASE);
 
   await testHealth();
+  await testModels();
   await testTextToImageWithRatio();
   await testTextToImageWithPixels();
   await testMultipleImages();
@@ -231,5 +255,6 @@ module.exports = {
   testTextToImageWithPixels,
   testStreamResponse,
   testMultipleImages,
-  testHealth
+  testHealth,
+  testModels
 };

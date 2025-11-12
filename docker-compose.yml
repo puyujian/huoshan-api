@@ -12,7 +12,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - VOLC_API_KEY=${VOLC_API_KEY}
       - VOLC_API_BASE=${VOLC_API_BASE:-https://ark.cn-beijing.volces.com/api/v3}
       - DEFAULT_MODEL=${DEFAULT_MODEL:-doubao-seedream-4.0}
     env_file:
