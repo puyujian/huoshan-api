@@ -12,7 +12,7 @@
  */
 function convertSize(size) {
   if (!size) {
-    return '2048x2048'; // 默认尺寸
+    return '4K'; // 默认尺寸 4K
   }
 
   // 如果是比例格式 (如 "3:4")
@@ -27,7 +27,7 @@ function convertSize(size) {
       '2:3': '1664x2496',
       '21:9': '3024x1296'
     };
-    return ratioMap[size] || '2048x2048';
+    return ratioMap[size] || '4K';
   }
 
   // 如果是分辨率级别或像素格式,直接返回
