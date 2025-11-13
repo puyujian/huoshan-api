@@ -62,19 +62,78 @@ docker run -d \
 docker logs -f openai-to-volc-image-api
 ```
 
-#### 3. 使用 GitHub Container Registry 镜像
+#### 3. 使用预构建的 Docker 镜像 (最便捷)
 
-我们提供了自动构建的 Docker 镜像，可以直接使用:
+我们提供了预构建的 Docker 镜像，可以直接使用，无需本地构建:
 
 ```bash
 # 拉取最新镜像
-docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
+docker pull ghcr.io/puyujian/huoshan-api:latest
 
-# 运行
+# 运行 (不固定 API 密钥,通过请求头传递)
 docker run -d \
-  --name openai-to-volc-image-api \
+  --name huoshan-api \
   -p 3000:3000 \
-  ghcr.io/[your-username]/openai-to-volc-image-api:main
+  -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
+  -e PORT=3000 \
+  ghcr.io/puyujian/huoshan-api:latest
+
+# 或者固定默认 API 密钥
+docker run -d \
+  --name huoshan-api \
+  -p 3000:3000 \
+  -e VOLC_API_KEY=your_api_key_here \
+  -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
+  -e PORT=3000 \
+  -e DEFAULT_MODEL=doubao-seedream-4.0 \
+  ghcr.io/puyujian/huoshan-api:latest
+
+# 查看日志
+docker logs -f huoshan-api
+
+# 停止容器
+docker stop huoshan-api
+
+# 启动容器
+docker start huoshan-api
+
+# 删除容器
+docker rm huoshan-api
+```
+
+**使用 Docker Compose 运行预构建镜像:**
+
+创建 `docker-compose.yml` 文件:
+
+```yaml
+version: '3.8'
+
+services:
+  huoshan-api:
+    image: ghcr.io/puyujian/huoshan-api:latest
+    container_name: huoshan-api
+    ports:
+      - "3000:3000"
+    environment:
+      # 可选: 如果需要固定默认密钥
+      # VOLC_API_KEY: your_api_key_here
+      VOLC_API_BASE: https://ark.cn-beijing.volces.com/api/v3
+      PORT: 3000
+      NODE_ENV: production
+      DEFAULT_MODEL: doubao-seedream-4.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+```
+
+然后运行:
+
+```bash
+docker-compose up -d
 ```
 
 ### 方式二: 本地 Node.js 运行
@@ -426,39 +485,102 @@ curl http://localhost:3000/health
 - ✅ 内置健康检查
 - ✅ 生产环境优化
 
-### 自动化构建
+### Docker 镜像
 
-本项目配置了 GitHub Actions 自动构建和发布 Docker 镜像到 GitHub Container Registry (ghcr.io)。
+本项目提供了预构建的 Docker 镜像，托管在 GitHub Container Registry:
 
-**触发条件:**
-- 推送到 `main` 分支
-- 发布新的 Release
-- 手动触发 workflow
+**镜像地址:** `ghcr.io/puyujian/huoshan-api:latest`
 
-**镜像标签:**
-- `main` - 最新的主分支构建
-- `sha-<commit>` - 特定 commit 的构建
-- `v1.0.0` - 版本号标签（从 Release 创建）
-
-**使用自动构建的镜像:**
+#### 快速启动
 
 ```bash
 # 拉取最新镜像
-docker pull ghcr.io/[your-username]/openai-to-volc-image-api:main
+docker pull ghcr.io/puyujian/huoshan-api:latest
 
-# 运行
+# 运行容器
 docker run -d \
+  --name huoshan-api \
   -p 3000:3000 \
-  ghcr.io/[your-username]/openai-to-volc-image-api:main
+  -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
+  ghcr.io/puyujian/huoshan-api:latest
 ```
 
-### 配置说明
+#### 使用 Docker Compose
 
-确保设置了以下环境变量：
-- `VOLC_API_KEY`: 可选,设置后作为默认 API 密钥,未配置时需要通过 Authorization 头传递
-- `VOLC_API_BASE`: API 基础 URL（可选，默认: `https://ark.cn-beijing.volces.com/api/v3`）
-- `PORT`: 服务端口（可选，默认: 3000）
-- `DEFAULT_MODEL`: 默认模型（可选，默认: `doubao-seedream-4.0`）
+推荐使用 Docker Compose 来管理容器，创建 `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  huoshan-api:
+    image: ghcr.io/puyujian/huoshan-api:latest
+    container_name: huoshan-api
+    ports:
+      - "3000:3000"
+    environment:
+      # 可选: 固定默认 API 密钥
+      # VOLC_API_KEY: your_api_key_here
+      VOLC_API_BASE: https://ark.cn-beijing.volces.com/api/v3
+      PORT: 3000
+      NODE_ENV: production
+      DEFAULT_MODEL: doubao-seedream-4.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+```
+
+启动服务:
+
+```bash
+docker-compose up -d
+```
+
+### 环境变量配置
+
+| 变量名 | 说明 | 默认值 | 必需 |
+|--------|------|--------|------|
+| `VOLC_API_KEY` | 火山引擎 API 密钥 (可选，未设置时通过请求头传递) | - | 否 |
+| `VOLC_API_BASE` | 火山引擎 API 基础地址 | `https://ark.cn-beijing.volces.com/api/v3` | 否 |
+| `PORT` | 服务端口 | `3000` | 否 |
+| `NODE_ENV` | 运行环境 | `production` | 否 |
+| `DEFAULT_MODEL` | 默认模型 | `doubao-seedream-4.0` | 否 |
+
+### 常用命令
+
+```bash
+# 查看容器日志
+docker logs -f huoshan-api
+
+# 查看容器状态
+docker ps
+
+# 停止容器
+docker stop huoshan-api
+
+# 启动容器
+docker start huoshan-api
+
+# 重启容器
+docker restart huoshan-api
+
+# 删除容器
+docker rm huoshan-api
+
+# 更新到最新镜像
+docker pull ghcr.io/puyujian/huoshan-api:latest
+docker stop huoshan-api
+docker rm huoshan-api
+docker run -d \
+  --name huoshan-api \
+  -p 3000:3000 \
+  -e VOLC_API_BASE=https://ark.cn-beijing.volces.com/api/v3 \
+  ghcr.io/puyujian/huoshan-api:latest
+```
 
 ## 项目结构
 
