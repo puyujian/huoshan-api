@@ -3,6 +3,28 @@
  * 负责 OpenAI ↔ 火山引擎参数格式转换
  */
 
+// 官方模型 ID 映射,用于兼容旧版本的模型名称
+const MODEL_ID_ALIASES = {
+  'doubao-seedream-4.0': 'doubao-seedream-4-0-250828',
+  'doubao-seedream-4-0': 'doubao-seedream-4-0-250828',
+  'doubao-seedream-3.0-t2i': 'doubao-seedream-3-0-t2i-250415',
+  'doubao-seedream-3-0-t2i': 'doubao-seedream-3-0-t2i-250415',
+  'doubao-seededit-3.0-i2i': 'doubao-seededit-3-0-i2i-250628',
+  'doubao-seededit-3-0-i2i': 'doubao-seededit-3-0-i2i-250628'
+};
+
+const GUIDANCE_SCALE_UNSUPPORTED = new Set([
+  'doubao-seedream-4-0-250828'
+]);
+
+function normalizeModelId(model) {
+  if (!model) {
+    return model;
+  }
+  const trimmed = String(model).trim();
+  return MODEL_ID_ALIASES[trimmed] || trimmed;
+}
+
 /**
  * Size 参数转换函数
  * 支持比例格式 (如 "3:4")、像素格式 (如 "1024x1024") 和分辨率级别 (如 "2K")
@@ -154,22 +176,35 @@ function convertOpenAIToVolc(openaiRequest) {
     }
   }
 
+  const normalizedModel = normalizeModelId(model);
+  const supportsGuidanceScale = normalizedModel && !GUIDANCE_SCALE_UNSUPPORTED.has(normalizedModel);
+
   // 构建火山引擎请求体
   const volcRequest = {
-    model,
+    model: normalizedModel,
     prompt,
-    stream,
-    watermark: add_watermark,
     response_format
   };
+
+  if (typeof stream === 'boolean') {
+    volcRequest.stream = stream;
+  }
+
+  if (typeof add_watermark === 'boolean') {
+    volcRequest.watermark = add_watermark;
+  }
 
   // 添加可选参数
   if (size) {
     volcRequest.size = convertSize(size);
   }
 
-  if (temperature !== undefined) {
-    volcRequest.guidance_scale = convertTemperature(temperature);
+  if (supportsGuidanceScale && temperature !== undefined && temperature !== null) {
+    const guidanceScale = convertTemperature(temperature);
+    // guidance_scale 仅对部分模型生效
+    if (guidanceScale >= 1 && guidanceScale <= 10) {
+      volcRequest.guidance_scale = guidanceScale;
+    }
   }
 
   if (images && images.length > 0) {
